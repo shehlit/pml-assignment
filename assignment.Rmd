@@ -1,0 +1,90 @@
+---
+title: "Predicting the Quality of Unilateral Dumbbell Biceps Curl"
+author: "Sheh Lit Chang"
+date: "June 25, 2016"
+output: html_document
+---
+
+## Background
+
+The goal of this project is to predict the manner people perform unilateral dumbbell biceps curl. The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. In this data, 6 young healthy participants were asked to perform 1 set of 10 repetitions of the exercise in 5 different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+## Loading data and appropriate packages
+
+The following code will load the data and the appropriate packages needed for the machine learning.
+
+```{r, message=FALSE, warning=FALSE}
+data <- read.csv("pml-training.csv")
+library(caret)
+library(dplyr)
+library(randomForest)
+library(gbm)
+```
+
+## Cleaning Data
+
+The data is cleaned in a manner such that all columns have NA values are removed, as well as column names that contained terms such as "kurtosis", "skewness", "min_yaw", "max_yaw", "amplitude_yaw". Removing columns containing NA values is necessary since they don't contribute much to the machine learning process. As for the columns that contain those terms, only some of them have entries, and there is a large number of entries blank.
+
+```{r}
+train1 <- data[, colSums(is.na(data)) == 0]
+train1 <- train1[,!grepl("kurtosis|skewness|min_yaw|max_yaw|amplitude_yaw", colnames(train1))]
+```
+
+## Training
+
+In this section, the data will be subsetted such that only the required variables (column roll_belt to classe) are needed for the training process, since the rest of the variables has the purpose of labeling a new measurement. Then, the subsetted data is split into two data frames, one for training, and one for validation.
+
+```{r}
+set.seed(1000)
+train2 <- select(train1, roll_belt:classe)
+inTrain <- createDataPartition(y=train2$classe, p=0.7, list=FALSE)
+training <- train2[inTrain,]
+validate <- train2[-inTrain,]
+```
+
+## Using Boosting 
+
+The following code will illustrate finding a model using gradient boosting machine (gbm).
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide'}
+fit_gbm <- train(classe~., data=training, method="gbm")
+```
+
+The following code will show how well the model predicts the validation data set.
+
+```{r, message=FALSE, warning=FALSE}
+pred_gbm <- predict(fit_gbm, validate)
+confusionMatrix(pred_gbm, validate$classe)
+```
+
+Based on the results, the accuracy on the validation set is 0.96.
+
+## Using Random Forest
+
+The following code will illustrate finding a model of prediction using Random Forest.
+
+Random Forest is chosen because it has higher accuracy. However, the time to fit the model takes more than 2 hours. If accuracy is the main priority, then this approach is still worth a try.
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE}
+fit_rf <- train(classe~., data=training, method="rf")
+pred_rf <- predict(fit_rf, validate)
+confusionMatrix(pred_rf, validate$classe)
+```
+
+The accuracy of this model on the validation set is 0.99.
+
+## Predict the Testing Set
+
+These 2 models fit the validation data set with high accuracy. Since RandomForest approach has a better accuracy, this model is use to predict the testing data set.
+
+When the testing data is loaded, the data is cleaned and the appropriate variables are selected for prediction.
+
+```{r}
+test1 <- read.csv("pml-testing.csv")
+test1 <- test1[, colSums(is.na(data)) == 0]
+test1 <- test1[,!grepl("kurtosis|skewness|min_yaw|max_yaw|amplitude_yaw", colnames(test1))]
+test2 <- select(test1, roll_belt:magnet_forearm_z)
+predict(fit_rf, test2)
+```
+
+The results predicts the 20 test cases accurately.
